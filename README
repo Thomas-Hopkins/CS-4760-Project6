@@ -1,0 +1,31 @@
+|----    README PROJECT 6    -----|
+|---- AUTHOR: Thomas Hopkins -----|
+|----  UMSL CMPSCI-4760-002  -----|
+
+|- COMPILING -|
+The provided Makefile will build the two executables "oss" and
+    "user_proc"
+Simply run "make" and the two  executables will be outputted.
+    See the USAGE section below to see how to run the programs.
+A cleaning function is provided. run "make clean" to clean up
+	the directory and leave only src behind.
+
+
+|- USAGE -|
+The "oss" executable is intended to simulate memory management on an operating
+    system using LRU replacement.
+
+The oss executable takes one argument to specify the number of children to spawn
+[-p num] The number of children processess to run with 
+
+The user-proc excutable is run by oss. It is not intended to be run alone.
+    However, it takes one argument from oss. This being the following:
+[-p pid] The simulated pid of the process
+
+
+|- FUNCTIONALITY -|
+The oss executable will generate a number of children processes. And add
+them to a schedule queue. It then runs these processes by selection from the
+queue.
+
+|- KNOWN ISSUES/LIMITATIONS -|
