@@ -51,14 +51,14 @@ int main(int argc, char** argv) {
         recieve_msg(&msg, PROC_MSG, true);
 
         // terminate this process after 900-1100 memory references (1000 +/- 100)
-        if (num_references > ((rand() % 1101) + 900)) {
+        if (num_references > ((rand() % 200) + 900)) {
             // Send termination message to OSS and exit
             strncpy(msg.msg_text, "terminate", MSG_BUFFER_LEN);
             msg.msg_type = getpid();
             send_msg(&msg, OSS_MSG, false);
             exit(sim_pid);
         }
-        // TODO: Request to read/write some memory for this process
+        // Request to read/write some memory for this process
         else {
             // Get a random page of this process's memory frame
             unsigned int page = rand() % MAX_PROC_MEM;
@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
             // Wait for response back 
             recieve_msg(&msg, PROC_MSG, true);
             // TODO: Do something with the response?
-            
+
             num_references++;
         }
     }

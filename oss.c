@@ -38,7 +38,9 @@ void initialize();
 int launch_child(char* command);
 void try_spawn_child();
 void handle_processes();
+void get_memory(int sim_pid, int page_ind, bool write);
 void remove_child(pid_t pid);
+void output_memory();
 void output_stats();
 void save_to_log(char* text);
 
@@ -86,15 +88,20 @@ int main(int argc, char** argv) {
 
     // Main OSS loop. We handle scheduling processes here.
     while (true) {
-        // Simulate some passed time for this loop (1 second and [0, 1000] nanoseconds)
-        add_time(&(shared_mem->sys_clock), 1, rand() % 1000);
+        // Simulate some passed time for this loop (1 second and [1000, 10000] nanoseconds)
+        add_time(&(shared_mem->sys_clock), 0, (rand() % 9001) + 1000);
         // try to spawn a new child if enough time has passed
         try_spawn_child();
 
         // Handle process requests 
         handle_processes();
 
-        // TODO: Every ___ references shift ref_bit 
+        // Every 10 references shift ref_bit
+        if (stats.writes + stats.reads > 10){
+            for (int i = 0; i < MAX_MAIN_MEM; i++) {
+                shared_mem->main_memory[i].ref_bit = shared_mem->main_memory[i].ref_bit >> 1;
+            }
+        }
 
         // See if any child processes have terminated
         pid_t pid = waitpid(-1, NULL, WNOHANG);
@@ -205,7 +212,8 @@ void try_spawn_child() {
     if (total_procs >= MAX_RUN_PROCS) return;
 
     // Check if enough time has passed on simulated sys clock to spawn new child
-    if ((shared_mem->sys_clock.seconds >= next_spawn.seconds) && (shared_mem->sys_clock.nanoseconds - next_spawn.nanoseconds)) {
+    if ((shared_mem->sys_clock.seconds > next_spawn.seconds) ||
+    ((shared_mem->sys_clock.seconds == next_spawn.seconds) && (shared_mem->sys_clock.nanoseconds >= next_spawn.nanoseconds))) {
         // Update next spawn time
         add_time(&next_spawn, 0, (rand() % MAX_TIME_LAUNCH) + MIN_TIME_LAUNCH);
 
@@ -278,15 +286,9 @@ void handle_processes() {
         snprintf(log_buf, 100, "OSS recieved request from P%d to read memory %s at %ld:%ld", sim_pid, cmd2, shared_mem->sys_clock.seconds, shared_mem->sys_clock.nanoseconds);
         save_to_log(log_buf);
 
-        // Determine if memory is already in main memory
-        // if yes, hit
-        // If not, page fault (more time)
-            
-            // If memory is full replace LRU (smallest ref_bit) with process request
-                // If dirty bit set on replaced this takes more time to simulate disk usage
-            // If memory not full fill first open (determined from allocated_frames) with process request
-
-        // referenced, so set most significant ref_bit to 1
+        // Try to get the memory frame that this process is pointing to
+        int page_ind = atoi(cmd2);
+        get_memory(sim_pid, page_ind, false);
 
         strncpy(msg.msg_text, "success", MSG_BUFFER_LEN);
         msg.msg_type = shared_mem->process_table[sim_pid].actual_pid;
@@ -299,16 +301,9 @@ void handle_processes() {
         snprintf(log_buf, 100, "OSS recieved request from P%d to write memory %s at %ld:%ld", sim_pid, cmd2, shared_mem->sys_clock.seconds, shared_mem->sys_clock.nanoseconds);
         save_to_log(log_buf);
 
-        // Determine if memory is already in main memory
-        // if yes, hit
-        // If not, page fault (more time)
-            
-            // If memory is full replace LRU (smallest ref_bit) with process request
-                // If dirty bit set on replaced this takes more time to simulate disk usage
-            // If memory not full fill first open (determined from allocated_frames) with process request
-
-        // referenced, so set most significant ref_bit to 1
-        // write so set dirty bit
+        // Try to get the memory frame that this process is pointing to
+        int page_ind = atoi(cmd2);
+        get_memory(sim_pid, page_ind, true);
 
         strncpy(msg.msg_text, "success", MSG_BUFFER_LEN);
         msg.msg_type = shared_mem->process_table[sim_pid].actual_pid;
@@ -321,6 +316,16 @@ void handle_processes() {
         save_to_log(log_buf);
 
         // Free any memory used by this process that is in main memory
+        for (int i = 0; i < MAX_PROC_MEM; i++) {
+            int main_mem_ind = shared_mem->process_table->page_table[i];
+            if (shared_mem->main_memory[main_mem_ind].owner_pid == sim_pid) {
+                shared_mem->main_memory[main_mem_ind].owner_pid = -1;
+                shared_mem->main_memory[main_mem_ind].ref_bit = 0;
+                shared_mem->main_memory[main_mem_ind].dirty_bit = 0;
+            }
+        }
+
+        output_memory();
 
         // Do not requeue this process.
         remove_child(shared_mem->process_table[sim_pid].actual_pid);
@@ -332,6 +337,91 @@ void handle_processes() {
 
     // Add some time for handling a process (0.1ms)
     add_time(&shared_mem->sys_clock, 0, rand() % 100000);
+}
+
+void get_memory(int sim_pid, int page_ind, bool write) {
+    char log_buf[100];
+    int main_mem_ind = shared_mem->process_table[sim_pid].page_table[page_ind];
+    // If the owner of this frame is not this process it must have been swapped, thus page fault
+    if (shared_mem->main_memory[main_mem_ind].owner_pid != sim_pid) {
+        stats.page_faults++;
+        snprintf(log_buf, 100, "Address P%d-%d not in frame, pagefault.", sim_pid, main_mem_ind);
+        save_to_log(log_buf);
+        // find open memory frame
+        main_mem_ind = -1;
+        for (int i = 0; i < MAX_MAIN_MEM; i++) {
+            if (!shared_mem->allocated_frames[i]) main_mem_ind = i;
+        }
+        if (main_mem_ind < 0) {
+            // no open frame found -> run LRU replacement algo
+            int least_mem = shared_mem->main_memory[0].ref_bit;
+            int least_mem_ind;
+            for (least_mem_ind = 1; least_mem_ind < MAX_MAIN_MEM; least_mem_ind++) {
+                if (shared_mem->main_memory[least_mem_ind].ref_bit < least_mem) least_mem = shared_mem->main_memory[least_mem_ind].ref_bit;
+                // Simulate time for finding LRU (around 10ns per iteration)
+                add_time(&shared_mem->sys_clock, 0, 10);
+            }
+            snprintf(log_buf, 100, "Replacing frame %d of used by P%d with P%d.", main_mem_ind, shared_mem->main_memory[least_mem_ind].owner_pid, sim_pid);
+            save_to_log(log_buf);
+
+            // Simulate more time for dirty bit (because of disk usage), 1000ns +/- 500ns
+            if (shared_mem->main_memory->dirty_bit > 0) {
+                snprintf(log_buf, 100, "Dirty bit of frame P%d-%d is set, simulating more time.", sim_pid, main_mem_ind);
+                save_to_log(log_buf);
+                add_time(&shared_mem->sys_clock, 0, (rand() % 1001) + 500);
+            }
+            
+            // Update process's reference to this memory address
+            shared_mem->process_table[sim_pid].page_table[page_ind] = least_mem_ind;
+            // Replace main memory frame
+            shared_mem->main_memory[least_mem_ind].owner_pid = sim_pid;
+            shared_mem->main_memory[least_mem_ind].dirty_bit = 0;
+        }
+        // Open frame found, insert into this
+        else {
+            snprintf(log_buf, 100, "Inserting into empty frame P%d-%d.", sim_pid, main_mem_ind);
+            save_to_log(log_buf);
+            // Update process's reference to this memory address
+            shared_mem->process_table[sim_pid].page_table[page_ind] = main_mem_ind;
+            // Replace main memory frame
+            shared_mem->main_memory[main_mem_ind].owner_pid = sim_pid;
+            shared_mem->main_memory[main_mem_ind].dirty_bit = 0;
+
+            // Update allocated
+            shared_mem->allocated_frames[main_mem_ind] = true;
+        }
+    }
+    else {
+        // hit
+        snprintf(log_buf, 100, "Address P%d-%d in frame, hit.", sim_pid, main_mem_ind);
+        save_to_log(log_buf);
+        stats.hits++;
+        // Simulate time (10ns)
+        add_time(&shared_mem->sys_clock, 0, 10);
+    }
+    // Set most sig bit to 1 since we referenced this
+    shared_mem->main_memory[main_mem_ind].ref_bit |= 128;
+
+    // Set dirty bit if this is a write operation
+    if (write) shared_mem->main_memory[main_mem_ind].dirty_bit = 1;
+
+    // Write out memory every 100 refs
+    if (((stats.writes + stats.reads) % 100) == 0) output_memory(); 
+}
+
+void output_memory() {
+    char log_buf[100];
+    snprintf(log_buf, 100, "Current memory layout at time %ld:%ld is:", shared_mem->sys_clock.seconds, shared_mem->sys_clock.nanoseconds);
+    save_to_log(log_buf);
+
+    snprintf(log_buf, 100, "%19s%10s%10s", "Occupied", "RefByte", "DirtyBit");
+    save_to_log(log_buf);
+
+    for (int i = 0; i < MAX_MAIN_MEM; i++) {
+        bool occupied = shared_mem->main_memory[i].owner_pid >= 0;
+        snprintf(log_buf, 100, "%s %3d%s%6s%11d%9d", "Frame", i, ":", occupied ? "Yes" : "No", shared_mem->main_memory[i].ref_bit, shared_mem->main_memory[i].dirty_bit);
+        save_to_log(log_buf);
+    }
 }
 
 void output_stats() {

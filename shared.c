@@ -64,6 +64,12 @@ void init_oss(bool create) {
 	// If not creating, return out
 	if (!create) return;
 
+	for (int i = 0; i < MAX_MAIN_MEM; i++) {
+		shared_mem->main_memory[i].dirty_bit = false;
+		shared_mem->main_memory[i].owner_pid = -1;
+		shared_mem->main_memory[i].ref_bit = 0;
+	}
+
 	// Setup system clock
 	shared_mem->sys_clock.seconds = 0;
 	shared_mem->sys_clock.nanoseconds = 0;
