@@ -20,6 +20,7 @@ static struct message msg;
 static char* exe_name;
 static int log_line = 0;
 static int total_procs = 0;
+static int num_proc = MAX_PROCESSES;
 static struct time_clock next_spawn; // Next time to try to spawn a child process
 
 struct statistics {
@@ -48,7 +49,6 @@ void save_to_log(char* text);
 
 int main(int argc, char** argv) {
     int option;
-    int num_proc;
     char error_buf[MAX_ERR_BUFF];
     exe_name = argv[0];
 
@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
                     errno = EINVAL;
 					snprintf(error_buf, MAX_ERR_BUFF, "%s: Max number of processes is %d Defaulting to %d", exe_name, MAX_PROCESSES, MAX_PROCESSES);
 					perror(error_buf);
-					return EXIT_FAILURE;
+					num_proc = MAX_PROCESSES;
                 }
 				break;
             case '?':
@@ -139,7 +139,7 @@ void signal_handler(int signum) {
 	}
 
     // Kill active children
-    for (int i = 0; i < MAX_PROCESSES; i++) {
+    for (int i = 0; i < num_proc; i++) {
         if (children[i] > 0) {
             kill(children[i], SIGKILL);
             children[i] = 0;
@@ -167,7 +167,7 @@ void initialize() {
     queue_init(&proc_queue);
 
     // Initialize children array
-    for (int i = 0; i < MAX_PROCESSES; i++) {
+    for (int i = 0; i < num_proc; i++) {
         children[i] = 0;
     }
 
@@ -220,10 +220,10 @@ void try_spawn_child() {
         add_time(&next_spawn, 0, (rand() % MAX_TIME_LAUNCH) + MIN_TIME_LAUNCH);
 
         // Check process control block availablity
-        if (num_children < MAX_PROCESSES) {
+        if (num_children < num_proc) {
             // Find open slot to put pid
             int sim_pid;
-            for (sim_pid = 0; sim_pid < MAX_PROCESSES; sim_pid++) {
+            for (sim_pid = 0; sim_pid < num_proc; sim_pid++) {
                 if (children[sim_pid] == 0) break;
             }
 
@@ -484,7 +484,6 @@ void output_stats() {
 
     unsigned int total_accesses = stats.reads + stats.writes;
     printf("\t%-12s %d\n", "TOTAL:", total_accesses);
-    printf("\t%-12s %d\n", "PROCESSES:", total_procs);
 
     printf("--MEMORY HITS/FAULTS\n");
     printf("\t%-12s %d\n", "HITS:", stats.hits);
@@ -503,6 +502,16 @@ void output_stats() {
     printf("--SIMULATED TIME\n");
     printf("\t%-12s %ld\n", "SECONDS:", shared_mem->sys_clock.seconds);
     printf("\t%-12s %ld\n", "NANOSECONDS:", shared_mem->sys_clock.nanoseconds);
+
+    printf("--GENERAL & CONFIG\n");
+    printf("\t%-18s %d\n", "TOTAL PROCESSES:", total_procs);
+    printf("\t%-18s %d\n", "TOTAL LOGLINES:", log_line);
+    printf("\t%-18s %s\n", "VERBOSE MODE:", LOG_VERBOSE ? "true" : "false");
+    printf("\t%-18s %s\n", "LOGFILE:", LOG_FILE);
+    printf("\t%-18s %d%%\n", "CHANCE WRITES:", PERCENT_WRITES);
+    printf("\t%-18s %d%%\n", "CHANCE SEGFAULT:", PERCENT_SEGFAULT);
+
+    
     printf("\n");
 }
 

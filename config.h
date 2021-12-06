@@ -3,14 +3,14 @@
 
 #include <stdbool.h>
 
-#define LOG_FILE_MAX 1000000 // Max lines in logfile
+#define LOG_FILE_MAX 100000 // Max lines in logfile
 #define LOG_FILE "logfile.log" // Logfile
 #define LOG_VERBOSE false // Verbose mode for logging
 #define SHM_FILE "shmOSS.shm" // File to use for shared memory tokens
 #define MAX_PROCESSES 18 // Max child processes to run concurrently regardless of user input
 #define MSG_BUFFER_LEN 2048 // Max buffer size for message queues
 #define MAX_ERR_BUFF 1024 // Max buffer length for error messages
-#define MAX_RUNTIME 300 // 5m
+#define MAX_RUNTIME 10 // 10s
 #define MAX_RUN_PROCS 40 // Max num of processes to run ever
 #define MAX_PROC_MEM 32 // Any process will only use 32KB of memory
 #define MAX_MAIN_MEM 256 // Max system memory is 256KB
