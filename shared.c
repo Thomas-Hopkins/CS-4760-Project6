@@ -68,6 +68,7 @@ void init_oss(bool create) {
 		shared_mem->main_memory[i].dirty_bit = false;
 		shared_mem->main_memory[i].owner_pid = -1;
 		shared_mem->main_memory[i].ref_bit = 0;
+		shared_mem->allocated_frames[i] = false;
 	}
 
 	// Setup system clock

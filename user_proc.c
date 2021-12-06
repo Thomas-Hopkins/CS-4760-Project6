@@ -62,6 +62,8 @@ int main(int argc, char** argv) {
         else {
             // Get a random page of this process's memory frame
             unsigned int page = rand() % MAX_PROC_MEM;
+            // 5% chance to reference invalid memory (seg fault)
+            if (rand() % 101 <= PERCENT_SEGFAULT) page = MAX_PROC_MEM + 1;
 
             // Generate a read/write message to this page
             if (rand() % 101 <= PERCENT_WRITES) {
