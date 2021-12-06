@@ -22,6 +22,7 @@ static int log_line = 0;
 static int total_procs = 0;
 static int num_proc = MAX_PROCESSES;
 static struct time_clock next_spawn; // Next time to try to spawn a child process
+static int last_mem_print = 0;
 
 struct statistics {
     unsigned int reads;
@@ -44,6 +45,7 @@ void replace_memory(int main_mem_ind, int sim_pid, int page_ind);
 void get_memory(int sim_pid, int page_ind, bool write);
 void remove_child(pid_t pid);
 void output_memory();
+void print_memory_map();
 void output_stats();
 void save_to_log(char* text);
 
@@ -91,15 +93,21 @@ int main(int argc, char** argv) {
     // Main OSS loop. We handle scheduling processes here.
     while (true) {
         // Simulate some passed time for this loop (1 second and [1000000, 10000000] nanoseconds)
-        add_time(&(shared_mem->sys_clock), 0, (rand() % 9000001) + 100000000);
+        add_time(&(shared_mem->sys_clock), 0, (rand() % 9000001) + 10000000);
         // try to spawn a new child if enough time has passed
         try_spawn_child();
 
         // Handle process requests 
         handle_processes();
 
-        // Every 100 references shift ref_bit
-        if (stats.writes + stats.reads > 100){
+        // Print memory map every logical second
+        if (last_mem_print < shared_mem->sys_clock.seconds) {
+            print_memory_map();
+            last_mem_print = shared_mem->sys_clock.seconds;
+        }
+
+        // Every 200 references shift ref_bit
+        if (stats.writes + stats.reads > 200){
             for (int i = 0; i < MAX_MAIN_MEM; i++) {
                 shared_mem->main_memory[i].ref_bit = shared_mem->main_memory[i].ref_bit >> 1;
             }
@@ -473,6 +481,17 @@ void output_memory() {
         snprintf(log_buf, 100, "%s %3d%s%6s%11d%9d", "Frame", i, ":", occupied ? "Yes" : "No", shared_mem->main_memory[i].ref_bit, shared_mem->main_memory[i].dirty_bit);
         save_to_log(log_buf);
     }
+}
+
+void print_memory_map() {
+    printf("\n");
+    printf("| ALLOCATED MEMORY |\n");
+    printf("TIME: %ld:%ld\n", shared_mem->sys_clock.seconds, shared_mem->sys_clock.nanoseconds);
+    for (int i = 0; i < MAX_MAIN_MEM; i++) {
+        printf("Frame %3d: %s\t", i, shared_mem->allocated_frames[i] ? "+" : ".");
+        if ((i + 1) % 4 == 0) printf("\n");
+    }
+    printf("\n");
 }
 
 void output_stats() {
