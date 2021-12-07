@@ -24,8 +24,31 @@ The user-proc excutable is run by oss. It is not intended to be run alone.
 
 
 |- FUNCTIONALITY -|
-The oss executable will generate a number of children processes. And add
-them to a schedule queue. It then runs these processes by selection from the
-queue.
+The oss executable will generate a number of children processes and give them each
+32KB (simulated) memory initially. Then after this it adds them to a schedule queue.
+It then runs these processes by selection from the queue and performs the requested
+task from each process.
+
+Each process will randomly request memory to read or write from the oss. It does
+this by randomly selecting from it's allocated memory from the OSS. Each process
+has a very low chance to request invalid memory location (segfault). 
+
+The OSS will determine if the process has its requested memory location already in
+main memory. If it does this is a hit, and nothing special is done. If it is not in memory
+the least recently used memory location (determined by each frame's ref_bit) will be
+replaced signifying a miss, or pagefault.
+
+Processes will have a chance to terminate after about 1000 memory references.
+
+Dirty bit will be set upon a write operation. Replacements of dirty memory will take more
+simulated time as this would have to be written to disk in a pagefile.
+
+|- CONFIGURATION -|
+The config.h file contains a few configurable definitions. This includes a boolean
+toggle for the logging verbose mode, a configuration for runtime, and others.
 
 |- KNOWN ISSUES/LIMITATIONS -|
+The daemon was not implemented to clear memory at 10% or less free space. The program
+instead only performs LRU replacement, that is replacing the least used location in the
+memory stack. The oss will detect if this location is referenced again by the program whose
+memory is replaced and perform a page swap. 

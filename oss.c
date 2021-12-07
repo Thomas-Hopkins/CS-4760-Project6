@@ -40,7 +40,6 @@ void initialize();
 int launch_child(char* command);
 void try_spawn_child();
 void handle_processes();
-void get_page();
 void replace_memory(int main_mem_ind, int sim_pid, int page_ind);
 void get_memory(int sim_pid, int page_ind, bool write);
 void remove_child(pid_t pid);
